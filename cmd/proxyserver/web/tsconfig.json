@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+        "strict": true,
+        "strictNullChecks": true,
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        "module": "esnext",
+    },
+    "exclude": [
+        "node_modules"
+    ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "web",
+  "version": "0.0.1",
+  "description": "web elements for webproxy",
+  "main": "inject.js",
+  "scripts": {
+    "test": "jest",
+    "build": "rollup -c"
+  },
+  "author": "LQR471814",
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^21.0.2",
+    "@rollup/plugin-node-resolve": "^13.1.3",
+    "@rollup/plugin-typescript": "^8.3.1",
+    "@types/jest": "^27.4.1",
+    "@types/urijs": "^1.19.19",
+    "html-minifier": "^4.0.0",
+    "jest": "^27.5.1",
+    "rollup": "^2.70.0",
+    "rollup-plugin-terser": "^7.0.2",
+    "ts-jest": "^27.1.3",
+    "tslib": "^2.3.1",
+    "typescript": "^4.6.2"
+  },
+  "dependencies": {
+    "urijs": "^1.19.10"
+  }
+}
