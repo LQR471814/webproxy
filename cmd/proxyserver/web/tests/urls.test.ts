@@ -51,10 +51,20 @@ test('Test transformURL', () => {
             expect: `http://${proxyDomain}/?proxyTargetURI=http%3A%2F%2Fa.b.c`
         },
         {
-            url: `http://${proxyDomain}/?proxyTargetURI=https%3A%2F%2Fstackoverflow.com%2Fquestions%2F51040703%2Fwhat-return-type-should-be-used-for-settimeout-in-typescript`,
-            domain: 'stackoverflow.com',
-            expect: `http://${proxyDomain}/?proxyTargetURI=https%3A%2F%2Fstackoverflow.com%2Fquestions%2F51040703%2Fwhat-return-type-should-be-used-for-settimeout-in-typescript`
-        }
+            url: ``,
+            domain: 'target.com',
+            expect: ``
+        },
+        {
+            url: `blob:https://example.org/40a5fb5a-d56d-4a33-b4e2-0acf6a8e5f64`,
+            domain: 'target.com',
+            expect: `blob:https://example.org/40a5fb5a-d56d-4a33-b4e2-0acf6a8e5f64`
+        },
+        {
+            url: `data:text/plain;base64,dGhpcyBpcyBzb21lIHRlc3QgdGV4dA==`,
+            domain: 'target.com',
+            expect: `data:text/plain;base64,dGhpcyBpcyBzb21lIHRlc3QgdGV4dA==`
+        },
     ]
     for (const v of vectors) {
         expect(transformURL(v.url, v.domain))

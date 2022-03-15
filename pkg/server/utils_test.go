@@ -70,3 +70,29 @@ func TestResolveRelativeURL(t *testing.T) {
 		}
 	}
 }
+
+func TestCSSURLReplacement(t *testing.T) {
+	replaceWith := "http://target.com"
+	vectors := []TestCase{
+		{`url("http://google.com")`, `url("http://target.com")`},
+		{`url('http://google.com')`, `url('http://target.com')`},
+		{`url(http://google.com)`, `url(http://target.com)`},
+		{
+			`.class{background-image: url("http://google.com/image.png"); width: 100px; height: 100px;}`,
+			`.class{background-image: url("http://target.com"); width: 100px; height: 100px;}`,
+		},
+	}
+
+	for _, test := range vectors {
+		result := ReplaceCSSURLMatch(
+			[]byte(test.Test.(string)),
+			func(b []byte) []byte {
+				return []byte(replaceWith)
+			},
+		)
+		onError := errorMessage(test, string(result), nil)
+		if string(result) != test.Expect {
+			t.Errorf(onError)
+		}
+	}
+}

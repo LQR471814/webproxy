@@ -78,7 +78,15 @@ func CopyHeaders(dst http.Header, headers http.Header) {
 }
 
 var StrictUrlMatch = regexp.MustCompile(`https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`)
-var CSSUrlMatch = regexp.MustCompile(`url\((.+)\)`)
+var CSSUrlMatch = regexp.MustCompile(`url\(['"]?([^'"]+)['"]?\)`)
+
+func ReplaceCSSURLMatch(buff []byte, repl func([]byte) []byte) []byte {
+	for _, match := range CSSUrlMatch.FindAllSubmatchIndex(buff, -1) {
+		result := repl(buff[match[2]:match[3]])
+		buff = append(buff[:match[2]], append(result, buff[match[3]:]...)...)
+	}
+	return buff
+}
 
 func DetectContentCharset(body io.Reader) string {
 	r := bufio.NewReader(body)

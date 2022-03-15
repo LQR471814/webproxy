@@ -3,26 +3,34 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	_ "embed"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
 )
+
+//go:embed inject.min.js
+var injectScript []byte
 
 const TARGET_QUERY_NAME = "proxyTargetURI"
 
 type address = string
 type domain = string
 
+type Session struct {
+	Client       *http.Client
+	TargetDomain string
+}
+
 type ProxyHandler struct {
-	Inject   string                        //inject javascript into site
 	Sessions map[string]map[string]Session //map[address]map[domain]Session
 }
 
@@ -32,7 +40,7 @@ func (h ProxyHandler) Session(address, domain string) Session {
 	}
 	if _, ok := h.Sessions[address][domain]; !ok {
 		h.Sessions[address][domain] = Session{
-			Client:       &http.Client{},
+			Client:       &http.Client{Timeout: 10 * time.Second},
 			TargetDomain: domain,
 		}
 	}
@@ -122,7 +130,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			FirstChild: &html.Node{
 				Type: html.RawNode,
 				Data: strings.Replace(
-					h.Inject, "${TARGET_DOMAIN}",
+					string(injectScript), "${TARGET_DOMAIN}",
 					targetURL.Host, 1,
 				),
 			},
@@ -135,10 +143,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		body = buff.Bytes()
 	case "text/css":
-		for _, match := range CSSUrlMatch.FindAllSubmatchIndex(body, -1) {
-			result := urlREPL(body[match[2]:match[3]])
-			body = append(body[:match[2]], append(result, body[match[3]:]...)...)
-		}
+		body = ReplaceCSSURLMatch(body, urlREPL)
 	case "text/ecmascript", "text/javascript", "text/markdown", "text/xml":
 		body = StrictUrlMatch.ReplaceAllFunc(body, urlREPL)
 	}
@@ -156,6 +161,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
+
 	err = encodedBody.Close()
 	if err != nil {
 		panic(err)
@@ -171,17 +177,8 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func NewProxyHandler() (ProxyHandler, error) {
-	f, err := os.Open("web/dist/inject.min.js")
-	if err != nil {
-		return ProxyHandler{}, err
-	}
-	script, err := io.ReadAll(f)
-	if err != nil {
-		return ProxyHandler{}, err
-	}
+func NewProxyHandler() ProxyHandler {
 	return ProxyHandler{
-		Inject:   string(script),
 		Sessions: make(map[string]map[string]Session),
-	}, nil
+	}
 }

@@ -23,6 +23,12 @@ func (h ContentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Redirect.ServeHTTP(w, r)
+	defer func() {
+		err := recover()
+		if err != nil {
+			log.Printf("%v %v failed due to %v", r.Method, r.URL, err)
+		}
+	}()
 }
 
 func main() {
@@ -36,16 +42,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	proxyHandler, err := server.NewProxyHandler()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	s := http.Server{Handler: ContentHandler{
 		Location:    "/",
 		Contents:    homepage,
 		ContentType: "text/html",
-		Redirect:    proxyHandler,
+		Redirect:    server.NewProxyHandler(),
 	}}
 
 	l, err := net.Listen("tcp", "127.0.0.1:3000")

@@ -4,11 +4,15 @@ export function transformURL(url: string, targetDomain: string): string {
     const result = new URI()
     const target = new URI(url)
 
+    if (url.length === 0 || url.startsWith("blob:") || url.startsWith("data:")) {
+        return url
+    }
+
     if (target.host() === window.location.host && target.hasQuery("proxyTargetURI")) {
         return url
     }
 
-    if (target.host().length === 0) {
+    if (target.host().length === 0 || target.scheme.length === 0) {
         target.host(targetDomain)
         target.protocol('http')
     }
@@ -22,8 +26,7 @@ export function transformURL(url: string, targetDomain: string): string {
 }
 
 export function handleAttr(
-    attr: string,
-    element: HTMLElement,
+    attr: string, element: HTMLElement,
     callback: (value: string) => string
 ) {
     const value = element.getAttribute(attr)
@@ -60,7 +63,6 @@ export function handleArchiveAttr(element: HTMLElement, targetDomain: string) {
             for (let i = 0; i < urls.length; i++) {
                 urls[i] = transformURL(urls[i].trim(), targetDomain)
             }
-
             return urls.join(',')
         }
     )
@@ -71,6 +73,7 @@ export function handleContentAttr(element: HTMLElement, targetDomain: string) {
         "content", element,
         (value) => {
             const components = value.split(';')
+            if (components.length < 2) return value
             components[1] = transformURL(components[1].trim(), targetDomain)
             return components.join(';')
         }
