@@ -163,9 +163,9 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Data: "script",
 			FirstChild: &html.Node{
 				Type: html.RawNode,
-				Data: strings.Replace(
+				Data: strings.ReplaceAll(
 					string(injectScript), "${TARGET_DOMAIN}",
-					session.TargetDomain, 1,
+					session.TargetDomain,
 				),
 			},
 		})
