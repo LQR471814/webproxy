@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	_ "embed"
 	"errors"
 	"io"
@@ -105,7 +106,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	//? Send request
 	response, err := session.Client.Do(&patchedRequest)
-	if err != nil {
+	if err != nil && !errors.Is(err, context.Canceled) {
 		panic(err)
 	}
 
