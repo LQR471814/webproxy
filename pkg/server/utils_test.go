@@ -28,7 +28,7 @@ func TestPruneSlice(t *testing.T) {
 		result := PruneSlice(test.Test.([]string))
 		for i, e := range test.Expect.([]string) {
 			if e != result[i] {
-				t.Errorf(errorMessage(test, result, nil))
+				t.Error(errorMessage(test, result, nil))
 			}
 		}
 	}
@@ -46,7 +46,7 @@ func TestNormalizeURL(t *testing.T) {
 		result, err := NormalizeURL(test.Test.(string))
 		onError := errorMessage(test, result, err)
 		if err != nil || result.String() != test.Expect {
-			t.Errorf(onError)
+			t.Error(onError)
 		}
 	}
 }
@@ -56,6 +56,7 @@ func TestResolveRelativeURL(t *testing.T) {
 		{[]string{"https://a.b.c", "unknown.org"}, "https://a.b.c"},
 		{[]string{"/gamer/moment", "unknown.org"}, "http://unknown.org/gamer/moment"},
 		{[]string{"gamer/moment?q=s", "unknown.org"}, "http://unknown.org/gamer/moment?q=s"},
+		{[]string{"../gamer/moment?q=s", "unknown.org"}, "http://unknown.org/../gamer/moment?q=s"},
 	}
 
 	for _, test := range vectors {
@@ -65,8 +66,8 @@ func TestResolveRelativeURL(t *testing.T) {
 		)
 
 		onError := errorMessage(test, result, err)
-		if err != nil || result.String() != test.Expect {
-			t.Errorf(onError)
+		if err != nil || result != test.Expect {
+			t.Error(onError)
 		}
 	}
 }
@@ -77,6 +78,7 @@ func TestCSSURLReplacement(t *testing.T) {
 		{`url("http://google.com")`, `url("http://target.com")`},
 		{`url('http://google.com')`, `url('http://target.com')`},
 		{`url(http://google.com)`, `url(http://target.com)`},
+		{`url(http://google.com); url(http://google.com)`, `url(http://target.com); url(http://target.com)`},
 		{
 			`.class{background-image: url("http://google.com/image.png"); width: 100px; height: 100px;}`,
 			`.class{background-image: url("http://target.com"); width: 100px; height: 100px;}`,
@@ -92,7 +94,25 @@ func TestCSSURLReplacement(t *testing.T) {
 		)
 		onError := errorMessage(test, string(result), nil)
 		if string(result) != test.Expect {
-			t.Errorf(onError)
+			t.Error(onError)
 		}
 	}
+}
+
+func TestTransformURL(t *testing.T) {
+	targetDomain := "target.com"
+	vectors := []TestCase{
+		{`https://www.external.com/path/to`, `http://www.proxy.com?proxyTargetURI=https%3A%2F%2Fwww.external.com%2Fpath%2Fto`},
+		{`/relative/path`, `http://www.proxy.com?proxyTargetURI=http%3A%2F%2Ftarget.com%2Frelative%2Fpath`},
+		{`../complex/path`, `http://www.proxy.com?proxyTargetURI=http%3A%2F%2Ftarget.com%2F..%2Fcomplex%2Fpath`},
+	}
+
+	for _, test := range vectors {
+		result := TransformURL(test.Test.(string), "www.proxy.com", targetDomain)
+		onError := errorMessage(test, string(result), nil)
+		if string(result) != test.Expect {
+			t.Error(onError)
+		}
+	}
+
 }

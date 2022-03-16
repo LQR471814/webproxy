@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	_ "embed"
+	"errors"
 	"io"
 	"io/ioutil"
 	"log"
@@ -11,7 +12,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
@@ -31,16 +31,17 @@ type Session struct {
 }
 
 type ProxyHandler struct {
-	Sessions map[string]map[string]Session //map[address]map[domain]Session
+	Sessions map[string]map[string]*Session //map[address]map[domain]Session
+	Quiet    bool
 }
 
-func (h ProxyHandler) Session(address, domain string) Session {
+func (h ProxyHandler) Session(address, domain string) *Session {
 	if _, ok := h.Sessions[address]; !ok {
-		h.Sessions[address] = make(map[string]Session)
+		h.Sessions[address] = make(map[string]*Session)
 	}
 	if _, ok := h.Sessions[address][domain]; !ok {
-		h.Sessions[address][domain] = Session{
-			Client:       &http.Client{Timeout: 10 * time.Second},
+		h.Sessions[address][domain] = &Session{
+			Client:       &http.Client{},
 			TargetDomain: domain,
 		}
 	}
@@ -53,9 +54,19 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	target := r.URL.Query().Get(TARGET_QUERY_NAME)
 	if len(target) == 0 {
-		w.WriteHeader(400)
-		w.Write([]byte("Missing proxyTargetURI!"))
-		return
+		targetDomainCookie, err := r.Cookie("Target-Domain")
+		if err == nil {
+			target = (&url.URL{
+				Scheme:   "http",
+				Host:     targetDomainCookie.Value,
+				Path:     r.URL.Path,
+				RawQuery: r.URL.RawQuery,
+			}).String()
+		} else {
+			w.WriteHeader(400)
+			w.Write([]byte("Missing proxyTargetURI!"))
+			return
+		}
 	}
 
 	targetURL, err := NormalizeURL(target)
@@ -63,19 +74,44 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	log.Printf("Requested %v\n", targetURL)
+	if !h.Quiet {
+		log.Printf("Requested %v\n", targetURL)
+	}
 
-	//? Initialize and send request
+	//? Initialize client session
+	session := h.Session(addr, targetURL.Host)
+
+	//? Patch client request
 	patchedRequest := *r
 	patchedRequest.Host = ""
 	patchedRequest.RequestURI = ""
 	patchedRequest.URL = targetURL
 	patchedRequest.Header.Set("Accept-Encoding", "gzip")
 
-	response, err := h.Session(addr, targetURL.Host).Client.Do(&patchedRequest)
+	//? Listen to redirects
+	latestRedirect := session.TargetDomain
+	redirects := 0
+	session.Client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if redirects > 10 {
+			return errors.New("amount of redirects exceeded 10")
+		}
+		if !h.Quiet {
+			log.Println("  Redirected ->", req.URL)
+		}
+		latestRedirect = req.URL.Host
+		redirects++
+		return nil
+	}
+
+	//? Send request
+	response, err := session.Client.Do(&patchedRequest)
 	if err != nil {
 		panic(err)
 	}
+
+	//? Account for redirects (in the case, the redirected domain contains
+	//? a resource the original doesn't ex. google.com vs. www.google.com)
+	session.TargetDomain = latestRedirect
 
 	//? Decompress and decode response body
 	var decompressed io.Reader
@@ -99,13 +135,11 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	urlREPL := func(target []byte) []byte {
-		parsed := &url.URL{}
-		parsed.Parse(string(target))
-		return []byte((&url.URL{
-			Scheme:   parsed.Scheme,
-			Host:     r.URL.Host,
-			RawQuery: TARGET_QUERY_NAME + "=" + url.QueryEscape(parsed.Host),
-		}).String())
+		return []byte(TransformURL(
+			string(target),
+			r.URL.Host,
+			session.TargetDomain,
+		))
 	}
 
 	mimetype := strings.Split(response.Header.Get("Content-Type"), ";")[0]
@@ -131,7 +165,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Type: html.RawNode,
 				Data: strings.Replace(
 					string(injectScript), "${TARGET_DOMAIN}",
-					targetURL.Host, 1,
+					session.TargetDomain, 1,
 				),
 			},
 		})
@@ -148,8 +182,20 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body = StrictUrlMatch.ReplaceAllFunc(body, urlREPL)
 	}
 
-	//? Header shenanigans
+	//? Copy target response headers
 	CopyHeaders(w.Header(), response.Header)
+
+	//? Add target domain as cookie in case a request
+	//? whose url can't be affected by html or JS is requested.
+	//?     Limitation: can only work with urls that aren't cross origin
+	//?     so this method will not replace the url parameter
+	w.Header().Add(
+		"Set-Cookie",
+		(&http.Cookie{
+			Name:  "Target-Domain",
+			Value: session.TargetDomain,
+		}).String(),
+	)
 
 	//? Deal with encodings
 	w.Header().Set("Content-Encoding", "gzip")
@@ -179,6 +225,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func NewProxyHandler() ProxyHandler {
 	return ProxyHandler{
-		Sessions: make(map[string]map[string]Session),
+		Sessions: make(map[string]map[string]*Session),
+		Quiet:    true,
 	}
 }

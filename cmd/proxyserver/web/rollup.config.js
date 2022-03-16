@@ -13,6 +13,6 @@ export default {
         commonjs(),
         resolve(),
         typescript(),
-        // terser()
+        terser()
     ],
 }
