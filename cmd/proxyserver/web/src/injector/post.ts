@@ -1,7 +1,9 @@
 import { handleArchiveAttr, handleAttr, handleContentAttr, handleSrcSetAttr, transformURL } from './urls'
 import { BufferedObserver } from './utils'
 
+const FULL_TARGET = '${FULL_TARGET}'
 const TARGET_DOMAIN = '${TARGET_DOMAIN}'
+
 const LINK_ATTRIBUTES = [
     "src",
     "href",
@@ -43,7 +45,6 @@ function handleAttribute(attribute: string, element: HTMLElement) {
     }
 }
 
-// document.body.addEventListener('load', () => {
 for (const attr of LINK_ATTRIBUTES) {
     const elements = document.evaluate(
         `//*[@${attr}]`, document, null,
@@ -72,4 +73,3 @@ observer.observe(document, {
     attributes: true,
     attributeFilter: LINK_ATTRIBUTES
 })
-// })

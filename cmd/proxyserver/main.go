@@ -1,11 +1,10 @@
 package main
 
 import (
-	"io/ioutil"
+	_ "embed"
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"webproxy/pkg/server"
 )
 
@@ -17,7 +16,7 @@ type ContentHandler struct {
 }
 
 func (h ContentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == h.Location && r.URL.Query().Get("proxyTargetURI") == "" {
+	if r.URL.Path == h.Location && r.URL.RawQuery == "" {
 		w.Header().Set("Content-Type", h.ContentType)
 		w.Write(h.Contents)
 		return
@@ -31,22 +30,15 @@ func (h ContentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+//go:embed web/src/home/index.html
+var homepage []byte
+
 func main() {
-	f, err := os.Open("web/src/index.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	homepage, err := ioutil.ReadAll(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	s := http.Server{Handler: ContentHandler{
 		Location:    "/",
 		Contents:    homepage,
 		ContentType: "text/html",
-		Redirect:    server.NewProxyHandler(),
+		Redirect:    server.NewProxyHandler(true),
 	}}
 
 	l, err := net.Listen("tcp", "127.0.0.1:3000")

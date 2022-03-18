@@ -60,7 +60,7 @@
     <script>
         const input = document.getElementById('request-site')
         const submit = document.getElementById('submit-button')
-        const go = () => location.href = `${window.location}?proxyTargetURI=${input.value}`
+        const go = () => location.href = `${window.location}?proxyTargetURI=${encodeURIComponent(input.value)}`
         submit.onclick = go
         input.onchange = go
     </script>

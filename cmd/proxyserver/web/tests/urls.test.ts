@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { transformURL } from "../src/urls";
+import { transformURL } from "../src/injector/urls";
 
 const proxyDomain = 'proxy.com:3000'
 global.window = Object.create(window)
@@ -49,6 +49,11 @@ test('Test transformURL', () => {
             url: `http://${proxyDomain}/?proxyTargetURI=http%3A%2F%2Fa.b.c`,
             domain: 'target.com',
             expect: `http://${proxyDomain}/?proxyTargetURI=http%3A%2F%2Fa.b.c`
+        },
+        {
+            url: '//en.wikipedia.org/',
+            domain: 'wikipedia.org',
+            expect: `http://${proxyDomain}/?proxyTargetURI=http%3A%2F%2Fen.wikipedia.org%2F`
         },
         {
             url: ``,

@@ -40,6 +40,7 @@ func TestNormalizeURL(t *testing.T) {
 		{"https://a.b.c/p/r.ext?q=s&qq=ss", "https://a.b.c/p/r.ext?q=s&qq=ss"},
 		{"ws://a.b.c", "ws://a.b.c"},
 		{"a.b.c", "http://a.b.c"},
+		{"a.b.c:3000", "http://a.b.c:3000"},
 	}
 
 	for _, test := range vectors {

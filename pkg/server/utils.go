@@ -2,6 +2,8 @@ package server
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"io"
 	"log"
 	"math"
@@ -15,6 +17,24 @@ import (
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding/htmlindex"
 )
+
+//StrictUrlMatch matches urls that must contain a scheme
+var StrictUrlMatch = regexp.MustCompile(`https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`)
+
+//CSSUrlMatch matches the CSS url() function and it's contents
+var CSSUrlMatch = regexp.MustCompile(`url\(['"]?([^\)'"]+)['"]?\)`)
+
+//ReplaceCSSURLMatch is a utility for replacing all the css url()
+//function links in a given byteslice with the repl function
+func ReplaceCSSURLMatch(buff []byte, repl func([]byte) []byte) []byte {
+	offset := 0
+	for _, match := range CSSUrlMatch.FindAllSubmatchIndex(buff, -1) {
+		replace := repl(buff[match[2]+offset : match[3]+offset])
+		buff = append(buff[:match[2]+offset], append(replace, buff[match[3]+offset:]...)...)
+		offset += len(replace) - (match[3] - match[2])
+	}
+	return buff
+}
 
 //PruneSlice removes all empty strings from a slice
 func PruneSlice(slice []string) []string {
@@ -61,6 +81,17 @@ func ResolveRelativeURL(target string, defaultDomain string) (string, error) {
 //This function should only be used to mimic browser search bar behavior
 //when accepting user input. JS, CSS and HTML prohibit these kinds of urls
 func NormalizeURL(target string) (*url.URL, error) {
+	ok := false
+	scheme := strings.Split(target, ":")[0]
+	for _, s := range []string{"http", "https", "ws", "wss", "ftp"} {
+		if s == scheme {
+			ok = true
+		}
+	}
+	if !ok {
+		target = "http://" + target
+	}
+
 	result := &url.URL{}
 
 	parsed, err := (&url.URL{}).Parse(target)
@@ -91,24 +122,6 @@ func CopyHeaders(dst http.Header, headers http.Header) {
 			dst.Add(name, v)
 		}
 	}
-}
-
-//StrictUrlMatch matches urls that must contain a scheme
-var StrictUrlMatch = regexp.MustCompile(`https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`)
-
-//CSSUrlMatch matches the CSS url() function and it's contents
-var CSSUrlMatch = regexp.MustCompile(`url\(['"]?([^\)'"]+)['"]?\)`)
-
-//ReplaceCSSURLMatch is a utility for replacing all the css url()
-//function links in a given byteslice with the repl function
-func ReplaceCSSURLMatch(buff []byte, repl func([]byte) []byte) []byte {
-	offset := 0
-	for _, match := range CSSUrlMatch.FindAllSubmatchIndex(buff, -1) {
-		replace := repl(buff[match[2]+offset : match[3]+offset])
-		buff = append(buff[:match[2]+offset], append(replace, buff[match[3]+offset:]...)...)
-		offset += len(replace) - (match[3] - match[2])
-	}
-	return buff
 }
 
 //TransformURL performs the same function as it's javascript counterpart
@@ -155,4 +168,49 @@ func DecodeHTMLBody(body io.Reader, charset string) (io.Reader, error) {
 		body = e.NewDecoder().Reader(body)
 	}
 	return body, nil
+}
+
+//OperateOnResponseBody automatically handles compression and encoding
+//so the callback can have an easy time modifying the http body
+func OperateOnResponseBody(body []byte, headers http.Header, handler func([]byte) []byte) ([]byte, error) {
+	var decompressed io.Reader = bytes.NewReader(body)
+	var err error
+
+	if headers.Get("Content-Encoding") == "gzip" {
+		decompressed, err = gzip.NewReader(decompressed)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	decoded, err := DecodeHTMLBody(decompressed, "utf-8")
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := io.ReadAll(decoded)
+	if err != nil {
+		return nil, err
+	}
+
+	modified := handler(b)
+
+	if headers.Get("Content-Encoding") == "gzip" {
+		buff := new(bytes.Buffer)
+
+		encodedBody := gzip.NewWriter(buff)
+		_, err = encodedBody.Write(modified)
+		if err != nil {
+			return nil, err
+		}
+
+		err = encodedBody.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		return buff.Bytes(), nil
+	} else {
+		return modified, nil
+	}
 }

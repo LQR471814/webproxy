@@ -7,13 +7,14 @@ export function transformURL(url: string, targetDomain: string): string {
     if (url.length === 0 || url.startsWith("blob:") || url.startsWith("data:")) {
         return url
     }
-
     if (target.host() === window.location.host && target.hasQuery("proxyTargetURI")) {
         return url
     }
 
-    if (target.host().length === 0 || target.scheme.length === 0) {
+    if (target.host().length === 0) {
         target.host(targetDomain)
+    }
+    if (target.protocol().length === 0) {
         target.protocol('http')
     }
 
